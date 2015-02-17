@@ -47,7 +47,7 @@ public class BMPDecoder {
     //DataOffset [4] file offset to raster data
     int dataOffset = lis.readIntLE();
     
-    /* info header [40] */
+    /* info header */
     
     infoHeader = readInfoHeader(lis);
     
@@ -179,6 +179,12 @@ public class BMPDecoder {
       img = read8(infoHeader, lis, colorTable);
       
     }
+    //16-bit uncompressed
+    else if (infoHeader.sBitCount == 16 && infoHeader.iCompression == BMPConstants.BI_RGB) {
+      
+      img = read16(infoHeader, lis);
+      
+    }
     //24-bit uncompressed
     else if (infoHeader.sBitCount == 24 && infoHeader.iCompression == BMPConstants.BI_RGB) {
       
@@ -245,7 +251,7 @@ public class BMPDecoder {
     
     // Create indexed image
     BufferedImage img = new BufferedImage(
-        infoHeader.iWidth, infoHeader.iHeight,
+        infoHeader.iWidth, Math.abs(infoHeader.iHeight),
         BufferedImage.TYPE_BYTE_BINARY,
         icm
         );
@@ -261,13 +267,23 @@ public class BMPDecoder {
     if (bitsPerLine % 32 != 0) {
       bitsPerLine = (bitsPerLine / 32 + 1) * 32;
     }
-    int padBits = bitsPerLine - dataBitsPerLine;
-    int padBytes = padBits / 8;
     
-    int bytesPerLine = (int) (bitsPerLine / 8);
+    int bytesPerLine = (infoHeader.iWidth + 31)/32 * 4;
     int[] line = new int[bytesPerLine];
     
-    for (int y = infoHeader.iHeight - 1; y >= 0; y--) {
+    // Initialize the loop for the usual case -- the image is to be read bottom to top, line by line
+    int startingY = infoHeader.iHeight - 1;
+    int finishingY = -1; //not inclusive
+    int incrementY = -1;
+    if(infoHeader.iHeight < 0){
+    	// If the height is negative, the image is to be read top to bottom
+    	startingY = 0;
+    	finishingY = -infoHeader.iHeight;
+    	incrementY = 1;
+    }
+    
+    // Read the data line by line and populate the raster
+    for (int y = startingY; y != finishingY; y += incrementY) {
       for (int i = 0; i < bytesPerLine; i++) {
         line[i] = lis.readUnsignedByte();
       }
@@ -277,8 +293,6 @@ public class BMPDecoder {
         int v = line[i];
         int b = x % 8;
         int index = getBit(v, b);
-        //int rgb = c[index];
-        //img.setRGB(x, y, rgb);
         //set the sample (colour index) for the pixel
         raster.setSample(x, y, 0, index);
       }
@@ -316,7 +330,7 @@ public class BMPDecoder {
         );
     
     BufferedImage img = new BufferedImage(
-        infoHeader.iWidth, infoHeader.iHeight,
+        infoHeader.iWidth, Math.abs(infoHeader.iHeight),
         BufferedImage.TYPE_BYTE_BINARY,
         icm
         );
@@ -332,7 +346,19 @@ public class BMPDecoder {
     
     int[] line = new int[bytesPerLine];
     
-    for (int y = infoHeader.iHeight - 1; y >= 0; y--) {
+    // Initialize the loop for the usual case -- the image is to be read bottom to top, line by line
+    int startingY = infoHeader.iHeight - 1;
+    int finishingY = -1; //not inclusive
+    int incrementY = -1;
+    if(infoHeader.iHeight < 0){
+    	// If the height is negative, the image is to be read top to bottom
+    	startingY = 0;
+    	finishingY = -infoHeader.iHeight;
+    	incrementY = 1;
+    }
+    
+    // Read the data line by line and populate the raster
+    for (int y = startingY; y != finishingY; y += incrementY) {
       //scan line
       for (int i = 0; i < bytesPerLine; i++) {
         int b = lis.readUnsignedByte();
@@ -383,23 +409,12 @@ public class BMPDecoder {
         );
     
     BufferedImage img = new BufferedImage(
-        infoHeader.iWidth, infoHeader.iHeight,
+        infoHeader.iWidth, Math.abs(infoHeader.iHeight),
         BufferedImage.TYPE_BYTE_INDEXED,
         icm
         );
     
     WritableRaster raster = img.getRaster();
-    
-      /*
-      //create color pallette
-      int[] c = new int[infoHeader.iNumColors];
-      for (int i = 0; i < c.length; i++) {
-        int r = colorTable[i].bRed;
-        int g = colorTable[i].bGreen;
-        int b = colorTable[i].bBlue;
-        c[i] = (r << 16) | (g << 8) | (b);
-      }
-       */
     
     //padding
     int dataPerLine = infoHeader.iWidth;
@@ -409,7 +424,19 @@ public class BMPDecoder {
     }
     int padBytesPerLine = bytesPerLine - dataPerLine;
     
-    for (int y = infoHeader.iHeight - 1; y >= 0; y--) {
+    // Initialize the loop for the usual case -- the image is to be read bottom to top, line by line
+    int startingY = infoHeader.iHeight - 1;
+    int finishingY = -1; //not inclusive
+    int incrementY = -1;
+    if(infoHeader.iHeight < 0){
+    	// If the height is negative, the image is to be read top to bottom
+    	startingY = 0;
+    	finishingY = -infoHeader.iHeight;
+    	incrementY = 1;
+    }
+    
+    // Read the data line by line and populate the raster
+    for (int y = startingY; y != finishingY; y += incrementY) {
       for (int x = 0; x < infoHeader.iWidth; x++) {
         int b = lis.readUnsignedByte();
         //int clr = c[b];
@@ -418,6 +445,69 @@ public class BMPDecoder {
         raster.setSample(x, y , 0, b);
       }
       
+      lis.skipBytes(padBytesPerLine);
+    }
+    
+    return img;
+  }
+  
+  /**
+   * Reads 16-bit (555) uncompressed bitmap raster data.
+   * @param lis the source input
+   * @param infoHeader the <tt>InfoHeader</tt> structure, which was read using
+   * {@link #readInfoHeader(net.sf.image4j.io.LittleEndianInputStream) readInfoHeader()}
+   * @throws java.io.IOException if an error occurs
+   * @return the decoded image read from the source input
+   */
+	public static BufferedImage read16(InfoHeader infoHeader,
+			net.sf.image4j.io.LittleEndianInputStream lis) throws IOException {
+		// 2 bytes (16 bits) per pixel
+		// blue 5 bits
+		// green 5 bits
+		// red 5 bits
+		// unused 1 bit
+		// lines padded to nearest 32 bits
+		// no alpha
+    
+    BufferedImage img = new BufferedImage(
+        infoHeader.iWidth, Math.abs(infoHeader.iHeight),
+        BufferedImage.TYPE_USHORT_555_RGB
+        );
+    
+    WritableRaster raster = img.getRaster();
+    
+    //padding to nearest 32 bits
+    int dataPerLine = infoHeader.iWidth * 2;
+    int bytesPerLine = dataPerLine;
+    if (bytesPerLine % 4 != 0) {
+      bytesPerLine = (bytesPerLine / 4 + 1) * 4;
+    }
+    int padBytesPerLine = bytesPerLine - dataPerLine;
+    
+    int redMask = 0x003E;
+    int greenMask = 0x07C0;
+    int blueMask = 0xF800;
+
+ // Initialize the loop for the usual case -- the image is to be read bottom to top, line by line
+    int startingY = infoHeader.iHeight - 1;
+    int finishingY = -1; //not inclusive
+    int incrementY = -1;
+    if(infoHeader.iHeight < 0){
+    	// If the height is negative, the image is to be read top to bottom
+    	startingY = 0;
+    	finishingY = -infoHeader.iHeight;
+    	incrementY = 1;
+    }
+    
+    // Read the data line by line and populate the raster
+    for (int y = startingY; y != finishingY; y += incrementY) {
+      for (int x = 0; x < infoHeader.iWidth; x++) {
+    	  short bgr = lis.readShortLE();
+
+        raster.setSample(x, y, 0, (redMask & bgr) );
+        raster.setSample(x, y, 1, (greenMask & bgr) >> 6);
+        raster.setSample(x, y, 2, (blueMask & bgr) >> 11);
+      }
       lis.skipBytes(padBytesPerLine);
     }
     
@@ -442,7 +532,7 @@ public class BMPDecoder {
     // no alpha
     
     BufferedImage img = new BufferedImage(
-        infoHeader.iWidth, infoHeader.iHeight,
+        infoHeader.iWidth, Math.abs(infoHeader.iHeight),
         BufferedImage.TYPE_INT_RGB
         );
     
@@ -456,7 +546,19 @@ public class BMPDecoder {
     }
     int padBytesPerLine = bytesPerLine - dataPerLine;
     
-    for (int y = infoHeader.iHeight - 1; y >= 0; y--) {
+    // Initialize the loop for the usual case -- the image is to be read bottom to top, line by line
+    int startingY = infoHeader.iHeight - 1;
+    int finishingY = -1; //not inclusive
+    int incrementY = -1;
+    if(infoHeader.iHeight < 0){
+    	// If the height is negative, the image is to be read top to bottom
+    	startingY = 0;
+    	finishingY = -infoHeader.iHeight;
+    	incrementY = 1;
+    }
+    
+    // Read the data line by line and populate the raster
+    for (int y = startingY; y != finishingY; y += incrementY) {
       for (int x = 0; x < infoHeader.iWidth; x++) {
         int b = lis.readUnsignedByte();
         int g = lis.readUnsignedByte();
@@ -494,14 +596,26 @@ public class BMPDecoder {
     //No padding since each pixel = 32 bits
     
     BufferedImage img = new BufferedImage(
-        infoHeader.iWidth, infoHeader.iHeight,
+        infoHeader.iWidth, Math.abs(infoHeader.iHeight),
         BufferedImage.TYPE_INT_ARGB
         );
     
     WritableRaster rgb = img.getRaster();
     WritableRaster alpha = img.getAlphaRaster();
     
-    for (int y = infoHeader.iHeight - 1; y >= 0; y--) {
+    // Initialize the loop for the usual case -- the image is to be read bottom to top, line by line
+    int startingY = infoHeader.iHeight - 1;
+    int finishingY = -1; //not inclusive
+    int incrementY = -1;
+    if(infoHeader.iHeight < 0){
+    	// If the height is negative, the image is to be read top to bottom
+    	startingY = 0;
+    	finishingY = -infoHeader.iHeight;
+    	incrementY = 1;
+    }
+    
+    // Read the data line by line and populate the raster
+    for (int y = startingY; y != finishingY; y += incrementY) {
       for (int x = 0; x < infoHeader.iWidth; x++) {
         int b = lis.readUnsignedByte();
         int g = lis.readUnsignedByte();
