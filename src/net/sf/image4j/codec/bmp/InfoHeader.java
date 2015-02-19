@@ -10,7 +10,6 @@
 package net.sf.image4j.codec.bmp;
 
 import java.io.IOException;
-import net.sf.image4j.io.LittleEndianOutputStream;
 
 /**
  * Represents a bitmap <tt>InfoHeader</tt> structure, which provides header information.
@@ -36,7 +35,7 @@ public class InfoHeader {
   public short sPlanes;
   /**
    * The bit count, which represents the colour depth (bits per pixel).
-   * This should be either <tt>1</tt>, <tt>4</tt>, <tt>8</tt>, <tt>24</tt> or <tt>32</tt>.
+   * This should be either <tt>1</tt>, <tt>4</tt>, <tt>8</tt>, <tt>16</tt>, <tt>24</tt> or <tt>32</tt>.
    */
   public short sBitCount;
   /**
@@ -45,6 +44,7 @@ public class InfoHeader {
    *  <li>{@link BMPConstants#BI_RGB BI_RGB} - no compression</li>
    *  <li>{@link BMPConstants#BI_RLE8 BI_RLE8} - 8-bit RLE compression</li>
    *  <li>{@link BMPConstants#BI_RLE4 BI_RLE4} - 4-bit RLE compression</li>
+   *  <li>{@link BMPConstants#BI_BITFIELDS BI_BITFIELDS} - bit fields (usually 16-bit RGB565)</li>
    * </ul>
    */
   public int iCompression;

@@ -180,7 +180,7 @@ public class BMPDecoder {
       
     }
     //16-bit uncompressed
-    else if (infoHeader.sBitCount == 16 && infoHeader.iCompression == BMPConstants.BI_RGB) {
+    else if (infoHeader.sBitCount == 16 && infoHeader.iCompression == BMPConstants.BI_BITFIELDS) {
       
       img = read16(infoHeader, lis);
       
@@ -452,7 +452,7 @@ public class BMPDecoder {
   }
   
   /**
-   * Reads 16-bit (555) uncompressed bitmap raster data.
+   * Reads 16-bit (565) uncompressed bitmap raster data.
    * @param lis the source input
    * @param infoHeader the <tt>InfoHeader</tt> structure, which was read using
    * {@link #readInfoHeader(net.sf.image4j.io.LittleEndianInputStream) readInfoHeader()}
@@ -463,15 +463,14 @@ public class BMPDecoder {
 			net.sf.image4j.io.LittleEndianInputStream lis) throws IOException {
 		// 2 bytes (16 bits) per pixel
 		// blue 5 bits
-		// green 5 bits
+		// green 6 bits
 		// red 5 bits
-		// unused 1 bit
 		// lines padded to nearest 32 bits
 		// no alpha
     
     BufferedImage img = new BufferedImage(
         infoHeader.iWidth, Math.abs(infoHeader.iHeight),
-        BufferedImage.TYPE_USHORT_555_RGB
+        BufferedImage.TYPE_USHORT_565_RGB
         );
     
     WritableRaster raster = img.getRaster();
@@ -484,9 +483,9 @@ public class BMPDecoder {
     }
     int padBytesPerLine = bytesPerLine - dataPerLine;
     
-    int redMask = 0x003E;
-    int greenMask = 0x07C0;
-    int blueMask = 0xF800;
+    int redMask = 0xF800;
+    int greenMask = 0x07E0;
+    int blueMask = 0x001F;
 
  // Initialize the loop for the usual case -- the image is to be read bottom to top, line by line
     int startingY = infoHeader.iHeight - 1;
@@ -504,9 +503,10 @@ public class BMPDecoder {
       for (int x = 0; x < infoHeader.iWidth; x++) {
     	  short bgr = lis.readShortLE();
 
-        raster.setSample(x, y, 0, (redMask & bgr) );
-        raster.setSample(x, y, 1, (greenMask & bgr) >> 6);
-        raster.setSample(x, y, 2, (blueMask & bgr) >> 11);
+    	  //img.setRGB(x, y, bgr);
+        raster.setSample(x, y, 0, (redMask & bgr) >> 11 );
+        raster.setSample(x, y, 1, (greenMask & bgr) >> 5);
+        raster.setSample(x, y, 2, (blueMask & bgr));
       }
       lis.skipBytes(padBytesPerLine);
     }

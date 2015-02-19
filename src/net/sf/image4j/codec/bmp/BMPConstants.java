@@ -37,4 +37,8 @@ public class BMPConstants {
    * @see InfoHeader#iCompression InfoHeader
    */
   public static final int BI_RLE4 = 2; //4bit RLE compression  
+  /**
+   * @see InfoHeader#iCompression InfoHeader
+   */
+  public static final int BI_BITFIELDS = 3; //Bit fields
 }
